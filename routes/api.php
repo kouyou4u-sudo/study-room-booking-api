@@ -8,3 +8,6 @@ Route::post('/reservations', [ReservationController::class, 'store']);
 
 // 仮予約メール内のリンクから本予約を確定する
 Route::get('/reservations/confirm/{token}', [ReservationController::class, 'confirm']);
+
+// キャンセルリンクから予約をキャンセルする
+Route::get('/reservations/cancel/{token}', [ReservationController::class, 'cancel']);

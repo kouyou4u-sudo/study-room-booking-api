@@ -178,6 +178,44 @@ class ReservationController extends Controller
     }
 
     /**
+     * キャンセルリンクをクリックしたときに予約をキャンセルする
+     */
+    public function cancel(string $token)
+    {
+        $reservation = Reservation::where('cancel_token', $token)->first();
+
+        if (!$reservation) {
+            return response(
+                '<h1>キャンセルリンクが無効です</h1><p>予約情報が見つかりませんでした。</p>',
+                404
+            );
+        }
+
+        if ($reservation->status === 'cancelled') {
+            return response(
+                '<h1>この予約はすでにキャンセル済みです</h1><p>この予約はすでにキャンセルされています。</p>',
+                200
+            );
+        }
+
+        if ($reservation->status === 'expired') {
+            return response(
+                '<h1>この仮予約は期限切れです</h1><p>期限切れの仮予約はキャンセル操作の必要がありません。</p>',
+                410
+            );
+        }
+
+        $reservation->update([
+            'status' => 'cancelled',
+        ]);
+
+        return response(
+            '<h1>予約をキャンセルしました</h1><p>自習室の予約をキャンセルしました。</p>',
+            200
+        );
+    }
+
+    /**
      * 利用者に見せる予約番号を作る
      *
      * 例：SR-20260427-A7K3
