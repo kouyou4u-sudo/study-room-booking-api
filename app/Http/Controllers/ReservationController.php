@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\ReservationConfirmationMail;
+use App\Mail\ReservationConfirmedMail;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -170,6 +171,16 @@ class ReservationController extends Controller
             'status' => 'active',
             'confirmed_at' => now(),
         ]);
+
+        /*
+         * update直後の最新状態を取り直す。
+         * confirmed_at や status を反映した状態で本予約確定メールを送るため。
+         */
+        $reservation->refresh();
+
+        Mail::to($reservation->email)->send(
+            new ReservationConfirmedMail($reservation)
+        );
 
         return response(
             '<h1>本予約が確定しました</h1><p>自習室の予約が確定しました。ご利用をお待ちしております。</p>',
