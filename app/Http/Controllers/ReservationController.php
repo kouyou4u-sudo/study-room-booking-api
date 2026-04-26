@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ReservationConfirmationMail;
 use App\Models\Reservation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class ReservationController extends Controller
@@ -48,7 +50,7 @@ class ReservationController extends Controller
      * 仮予約を作成する
      *
      * この時点では本予約ではなく status=pending として保存する。
-     * メール確認リンクをクリックしたら status=active に変更する想定。
+     * 確認メール内のリンクをクリックしたら status=active に変更する。
      */
     public function store(Request $request)
     {
@@ -70,8 +72,6 @@ class ReservationController extends Controller
          *
          * active の本予約、
          * または期限内 pending の仮予約がある場合は予約不可。
-         *
-         * cancelled / expired / 期限切れpending はブロックしない。
          */
         $existing = Reservation::where('date', $validated['date'])
             ->where('time_slot', $validated['time_slot'])
@@ -110,20 +110,77 @@ class ReservationController extends Controller
             'cancel_token' => Str::random(64),
         ]);
 
-        /*
-         * 次のステップでここに仮予約確認メール送信処理を追加する。
-         */
+        Mail::to($reservation->email)->send(
+            new ReservationConfirmationMail($reservation)
+        );
 
         return response()->json([
-            'message' => '仮予約を受け付けました。確認メール送信機能は次のステップで追加します。',
+            'message' => '仮予約を受け付けました。確認メールを送信しました。',
             'reservation' => $reservation,
         ], 201);
     }
 
     /**
+     * 仮予約確認リンクをクリックしたときに本予約へ変更する
+     */
+    public function confirm(string $token)
+    {
+        $reservation = Reservation::where('confirmation_token', $token)->first();
+
+        if (!$reservation) {
+            return response(
+                '<h1>確認リンクが無効です</h1><p>予約情報が見つかりませんでした。</p>',
+                404
+            );
+        }
+
+        if ($reservation->status === 'active') {
+            return response(
+                '<h1>本予約はすでに確定済みです</h1><p>この予約はすでに本予約として確定しています。</p>',
+                200
+            );
+        }
+
+        if ($reservation->status === 'cancelled') {
+            return response(
+                '<h1>この予約はキャンセル済みです</h1><p>キャンセル済みの予約は確定できません。</p>',
+                410
+            );
+        }
+
+        if ($reservation->status === 'expired') {
+            return response(
+                '<h1>仮予約の有効期限が切れています</h1><p>お手数ですが、もう一度予約をお申し込みください。</p>',
+                410
+            );
+        }
+
+        if ($reservation->expires_at && $reservation->expires_at->isPast()) {
+            $reservation->update([
+                'status' => 'expired',
+            ]);
+
+            return response(
+                '<h1>仮予約の有効期限が切れています</h1><p>お手数ですが、もう一度予約をお申し込みください。</p>',
+                410
+            );
+        }
+
+        $reservation->update([
+            'status' => 'active',
+            'confirmed_at' => now(),
+        ]);
+
+        return response(
+            '<h1>本予約が確定しました</h1><p>自習室の予約が確定しました。ご利用をお待ちしております。</p>',
+            200
+        );
+    }
+
+    /**
      * 利用者に見せる予約番号を作る
      *
-     * 例：SR-20260426-A7K3
+     * 例：SR-20260427-A7K3
      */
     private function generateReservationCode(): string
     {
