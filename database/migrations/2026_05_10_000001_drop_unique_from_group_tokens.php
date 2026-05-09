@@ -6,7 +6,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // PostgreSQL向けに create_reservations_table に統合済みのため、ここでは何もしない
+        // PostgreSQL向け初期構成では不要のため何もしない
     }
 
     public function down(): void

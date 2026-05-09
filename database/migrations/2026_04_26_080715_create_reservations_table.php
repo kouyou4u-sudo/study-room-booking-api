@@ -13,16 +13,33 @@ return new class extends Migration
     {
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
-            $table->string('student_name');       // 氏名
-            $table->string('grade');               // 学年
-            $table->string('email');               // メールアドレス
-            $table->string('phone')->nullable();    // 電話番号（任意）
-            $table->date('date');                  // 予約日
-            $table->string('time_slot');           // 時間帯（例："13:00〜13:55"）
-            $table->integer('seat_number');        // 座席番号（1〜20）
-            $table->text('note')->nullable();      // 備考（任意）
-            $table->string('status')->default('active'); // ステータス
-            $table->unique(['date', 'time_slot', 'seat_number']); // 二重予約防止
+
+            // 利用者情報
+            $table->string('student_name');               // 氏名
+            $table->string('grade');                      // 学年
+            $table->string('usage_type');                 // 利用区分
+            $table->string('email');                      // メールアドレス
+            $table->string('phone')->nullable();          // 電話番号（任意）
+
+            // 予約情報
+            $table->date('date');                         // 予約日
+            $table->string('time_slot');                  // 時間帯（1コマ1レコード）
+            $table->integer('seat_number');               // 座席番号
+            $table->text('note')->nullable();             // 備考（任意）
+
+            // 状態管理
+            $table->string('status')->default('pending'); // pending / active / cancelled / expired
+
+            // 申込み単位で共通に使う識別子
+            $table->string('reservation_code')->nullable()->index();
+            $table->string('confirmation_token')->nullable()->index();
+            $table->timestamp('confirmed_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
+            $table->string('cancel_token')->nullable()->index();
+
+            // 検索用インデックス
+            $table->index(['date', 'time_slot', 'seat_number']);
+
             $table->timestamps();
         });
     }
