@@ -8,6 +8,7 @@ use App\Models\Reservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class ReservationController extends Controller
@@ -153,9 +154,37 @@ class ReservationController extends Controller
         $mailReservation = $createdReservations->first();
         $mailReservation->time_slot = implode(' / ', $createdReservations->pluck('time_slot')->all());
 
-        Mail::to($mailReservation->email)->send(
-            new ReservationConfirmationMail($mailReservation)
-        );
+        $html = view('emails.reservations.confirmation', [
+            'reservation' => $mailReservation,
+        ])->render();
+
+        $brevoResponse = Http::withHeaders([
+            'api-key' => env('BREVO_API_KEY'),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        ])->post(env('BREVO_API_URL', 'https://api.brevo.com/v3/smtp/email'), [
+            'sender' => [
+                'name' => env('MAIL_FROM_NAME', '自習室予約'),
+                'email' => env('MAIL_FROM_ADDRESS'),
+            ],
+            'to' => [
+                [
+                    'email' => $mailReservation->email,
+                    'name' => $mailReservation->student_name ?? $mailReservation->email,
+                ],
+            ],
+            'subject' => '【自習室予約】仮予約確認のお願い',
+            'htmlContent' => $html,
+        ]);
+
+        if (!$brevoResponse->successful()) {
+            logger()->error('Brevo API送信エラー', [
+                'status' => $brevoResponse->status(),
+                'body' => $brevoResponse->body(),
+            ]);
+
+            throw new \Exception('メール送信に失敗しました。');
+        }
 
         return response()->json([
             'message' => '仮予約を受け付けました。確認メールを送信しました。',
@@ -184,15 +213,16 @@ class ReservationController extends Controller
             );
         }
 
-        if ($reservations->every(fn ($reservation) => $reservation->status === 'active')) {
+        if ($reservations->every(fn($reservation) => $reservation->status === 'active')) {
             return response(
                 '<h1>本予約はすでに確定済みです</h1><p>この予約はすでに本予約として確定しています。</p>',
                 200
             );
         }
 
-        if ($reservations->contains(fn ($reservation) => $reservation->status === 'cancelled')
-            && !$reservations->contains(fn ($reservation) => $reservation->status === 'pending')
+        if (
+            $reservations->contains(fn($reservation) => $reservation->status === 'cancelled')
+            && !$reservations->contains(fn($reservation) => $reservation->status === 'pending')
         ) {
             return response(
                 '<h1>この予約はキャンセル済みです</h1><p>キャンセル済みの予約は確定できません。</p>',
@@ -266,7 +296,7 @@ class ReservationController extends Controller
             );
         }
 
-        if ($reservations->every(fn ($reservation) => $reservation->status === 'cancelled')) {
+        if ($reservations->every(fn($reservation) => $reservation->status === 'cancelled')) {
             return response(
                 '<h1>この予約はすでにキャンセル済みです</h1><p>この予約はすでにキャンセルされています。</p>',
                 200
@@ -330,7 +360,7 @@ class ReservationController extends Controller
         }
 
         return collect($timeSlots)
-            ->map(fn ($slot) => is_string($slot) ? trim($slot) : '')
+            ->map(fn($slot) => is_string($slot) ? trim($slot) : '')
             ->filter()
             ->unique()
             ->values()
