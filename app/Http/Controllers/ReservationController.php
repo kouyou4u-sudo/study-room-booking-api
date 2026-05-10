@@ -158,6 +158,7 @@ class ReservationController extends Controller
 
         $html = view('emails.reservations.confirmation', [
             'reservation' => $mailReservation,
+            'confirmationUrl' => $confirmationUrl,
         ])->render();
 
         $brevoResponse = Http::withHeaders([
