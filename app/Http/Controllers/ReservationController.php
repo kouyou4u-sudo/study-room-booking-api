@@ -154,6 +154,8 @@ class ReservationController extends Controller
         $mailReservation = $createdReservations->first();
         $mailReservation->time_slot = implode(' / ', $createdReservations->pluck('time_slot')->all());
 
+        $confirmationUrl = url('/api/reservations/confirm/' . $mailReservation->confirmation_token);
+
         $html = view('emails.reservations.confirmation', [
             'reservation' => $mailReservation,
         ])->render();
